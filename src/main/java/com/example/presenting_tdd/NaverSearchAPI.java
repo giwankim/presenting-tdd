@@ -1,48 +1,60 @@
 package com.example.presenting_tdd;
 
-import java.util.List;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
-import org.springframework.web.reactive.function.client.WebClient.Builder;
-import reactor.core.publisher.Mono;
+
+import java.util.List;
 
 @Component
 public class NaverSearchAPI {
+    @Autowired
+    WebClient webClient;
 
-  private static final String URL = "https://openapi.naver.com";
-  private final String naverClientId = System.getenv().get("NAVER_CLIENT_ID");
-  private final String naverClientSecret = System.getenv().get("NAVER_CLIENT_SECRET");
-  @Autowired
-  private Builder webClientBuilder;
+    public NaverSearchAPI() {
+    }
 
-  public NaverSearchAPI() {
-  }
+    SearchResult search(String query, int display, int start, String sort) {
+        return webClient.get()
+                .uri(uriBuilder -> uriBuilder
+                        .queryParam("query", query)
+                        .queryParam("display", display)
+                        .queryParam("start", start)
+                        .queryParam("sort", sort)
+                        .build())
+                .retrieve()
+                .bodyToMono(SearchResult.class)
+                .block();
+    }
 
-  public SearchResult search() {
-    WebClient webClient = webClientBuilder.baseUrl(URL).build();
-    Mono<SearchResult> response = webClient.get()
-        .uri(uriBuilder -> uriBuilder
-            .path("/v1/search/local")
-            .queryParam("query", "갈비집")
-            .queryParam("display", 5)
-            .queryParam("start", 1)
-            .queryParam("sort", "random")
-            .build())
-        .header("X-Naver-Client-Id", naverClientId)
-        .header("X-Naver-Client-Secret", naverClientSecret)
-        .retrieve()
-        .bodyToMono(SearchResult.class);
-    return response.block();
-  }
-}
+    @Configuration
+    static class WebClientConfig {
+        @Value("${NAVER_CLIENT_ID}")
+        private String clientId;
 
-record SearchResult(String lastBuildDate, String total, String start, String display,
-                    List<Item> items) {
+        @Value("${NAVER_CLIENT_SECRET}")
+        private String clientSecret;
 
-}
+        @Bean
+        public WebClient webClient() {
+            return WebClient.builder()
+                    .baseUrl("https://openapi.naver.com/v1/search/local.json")
+                    .defaultHeader(HttpHeaders.CONTENT_TYPE, MediaType.APPLICATION_JSON_VALUE)
+                    .defaultHeader("X-Naver-Client-Id", clientId)
+                    .defaultHeader("X-Naver-Client-Secret", clientSecret)
+                    .build();
+        }
+    }
 
-record Item(String title, String link, String category, String description, String telephone,
-            String address, String roadAddress, String mapx, String mapy) {
+    record SearchResult(String lastBuildDate, int total, int start, int display, List<Item> items) {
+    }
 
+    record Item(String title, String link, String category, String description, String telephone, String address,
+                       String roadAddress, String mapx, String mapy) {
+    }
 }
